@@ -6,10 +6,61 @@
 
 generator client {
   provider = "prisma-client-js"
-  output = "../generated/prisma"
+  output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String  @id @default(uuid())
+  username        String  @unique
+  password        String
+  email           String  @unique
+  photo           String?
+
+  // Many-to-many: Rooms the user has joined
+  joinedRooms     Room[]  @relation("RoomParticipants")
+
+  // One-to-many: Rooms the user controls (admin)
+  controlledRooms Room[]  @relation("RoomAdmin")
+
+  // One-to-many: User's messages
+  chat            Chat[]
+}
+
+model Room {
+  id           String   @id @default(uuid())
+  title        String
+  joincode     String   @unique
+
+  // Many-to-many: Users who joined this room
+  participants User[]   @relation("RoomParticipants")
+
+  // One-to-many: Admin of the room
+  admin        User     @relation("RoomAdmin", fields: [adminId], references: [id])
+  adminId      String
+
+  // One-to-many: Chat messages in this room
+  chat         Chat[]
+
+  createdat    DateTime @default(now())
+}
+
+model Chat {
+  id           String   @id @default(uuid())
+  serialNumber Int      @default(autoincrement())
+  content      String
+
+  // One-to-many: Message belongs to a user
+  user         User     @relation(fields: [userId], references: [id])
+  userId       String
+
+  // One-to-many: Message belongs to a room
+  room         Room     @relation(fields: [roomId], references: [id])
+  roomId       String
+
+  createdAt    DateTime @default(now())
 }
