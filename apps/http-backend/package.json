@@ -9,7 +9,6 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "@repo/typescript-config": "workspace:*",
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
     "nodemon": "^3.1.10",
@@ -20,6 +19,9 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "@types/express": "^5.0.3"
+    "@types/express": "^5.0.3",
+    "@repo/typescript-config": "workspace:*",
+    "@repo/common" : "workspace:*",
+    "@repo/db" : "workspace:*"
   }
 }
