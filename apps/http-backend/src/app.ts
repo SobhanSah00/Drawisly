@@ -17,4 +17,9 @@ app.use(cors({
 }))
 app.use(express.urlencoded({extended : true,limit : '8mb'}))
 
+
+import userRouter from "./routes/user.route"
+
+app.use("/api/v1/auth",userRouter)
+
 export default app
