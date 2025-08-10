@@ -1,18 +1,12 @@
-import express from "express"
-import dotenv,{config} from "dotenv"
-import path from "path"
+import app from "./app";
+import { prisma } from "@repo/db/client"
+const PORT = process.env.PORT || 9000;
 
-config({
-    path : path.resolve(__dirname,"../../../.env")
-})
-
-const app = express()
-const PORT = process.env.PORT || 8000;
-
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`Express Server Listen at ${PORT}`);
 })
 
-// routes
-
-// imports
+process.on('SIGINT', async () => {
+    await prisma.$disconnect();
+    server.close(() => process.exit(0))
+})
