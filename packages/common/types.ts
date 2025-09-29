@@ -16,7 +16,7 @@ export const CreateRoomSchema = z.object({
 })
 
 export const JoinRoomSchema = z.object({
-    joinCode : z.string().length(8)
+    joinCode : z.string()
 })
 
 export const WebSocketMessageSchema = z.object({

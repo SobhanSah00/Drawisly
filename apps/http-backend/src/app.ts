@@ -19,7 +19,9 @@ app.use(express.urlencoded({extended : true,limit : '8mb'}))
 
 
 import userRouter from "./routes/user.route"
+import roomRouter from "./routes/room.route"
 
 app.use("/api/v1/auth",userRouter)
+app.use("/api/v1/room",roomRouter)
 
 export default app
