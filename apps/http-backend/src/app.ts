@@ -20,8 +20,12 @@ app.use(express.urlencoded({extended : true,limit : '8mb'}))
 
 import userRouter from "./routes/user.route"
 import roomRouter from "./routes/room.route"
+import chatRouter from "./routes/chat.route"
+import drawRouter from "./routes/draw.route"
 
 app.use("/api/v1/auth",userRouter)
 app.use("/api/v1/room",roomRouter)
+app.use("/api/v1/chat",chatRouter)
+app.use("/api/v1/draw",drawRouter)
 
 export default app

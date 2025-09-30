@@ -51,8 +51,9 @@ model Room {
 }
 
 model Chat {
-  id           Int @id @default(autoincrement())
-  content      String
+  seriealNo Int    @default(autoincrement())
+  id        String @id @default(uuid())
+  content   String
 
   // One-to-many: Message belongs to a user
   user   User   @relation(fields: [userId], references: [id])
@@ -74,8 +75,9 @@ enum Shape {
   text
   freeHand
 }
+
 model Draw {
-  id          Int  @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   shape       Shape
   strokeStyle String
   fillStyle   String

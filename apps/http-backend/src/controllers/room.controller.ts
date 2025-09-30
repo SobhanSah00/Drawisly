@@ -93,7 +93,7 @@ export async function joinRoomController(req: Request, res: Response) {
   }
 }
 
-export async function fetchAllRoomsController(req: Request, res: Response) {
+export async function fetchAllRoomsOfParticipantsController(req: Request, res: Response) {
   const userId = req.userId;
   if (!userId) {
     res.status(401).json({
@@ -103,10 +103,12 @@ export async function fetchAllRoomsController(req: Request, res: Response) {
   }
   try {
     const rooms = await prisma.room.findMany({
-      where: {
-        participants: {
-          some: { id: userId },
-        },
+      where : {
+        participants : {
+          some : {
+            id : userId
+          }
+        }
       },
       select: {
         id: true,
@@ -122,7 +124,7 @@ export async function fetchAllRoomsController(req: Request, res: Response) {
         chat: {
           take: 1,
           orderBy: {
-            id: "desc",
+            seriealNo: "desc",
           },
           select: {
             user: {
@@ -159,4 +161,72 @@ export async function fetchAllRoomsController(req: Request, res: Response) {
       message: "Error fetching rooms",
     });
   }
+}
+
+export async function fetchAllRoomOfAdminController(req: Request, res: Response) {
+  const userId = req.userId;
+  if (!userId) {
+    res.status(401).json({
+      message: "User Id not found",
+    });
+    return;
+  }
+  try {
+    const roomCreatedByAdmin = await prisma.room.findMany({
+      where: {
+        adminId: userId
+      },
+      select: {
+        id: true,
+        title: true,
+        joincode: true,
+        createdat: true,
+        admin: {
+          select: {
+            username: true,
+          },
+        },
+        adminId: true,
+        chat: {
+          take: 1,
+          orderBy: {
+            seriealNo: "desc",
+          },
+          select: {
+            user: {
+              select: {
+                username: true,
+              },
+            },
+            content: true,
+            createdAt: true,
+          },
+        },
+        draw: {
+          take: 10,
+        },
+      },
+      orderBy: {
+        createdat: "desc",
+      },
+    })
+
+    const sortedRooms = roomCreatedByAdmin.sort((a, b) => {
+      const aLatestChat = a.chat[0]?.createdAt || a.createdat;
+      const bLatestChat = b.chat[0]?.createdAt || b.createdat;
+      return new Date(bLatestChat).getTime() - new Date(aLatestChat).getTime();
+    });
+
+    res.json({
+      message: "Admin who created the Rooms fetched successfully",
+      rooms: sortedRooms,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      message: "Error in fetching rooms",
+    });
+  }
+
+
 }
