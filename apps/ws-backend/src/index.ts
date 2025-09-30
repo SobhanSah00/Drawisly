@@ -1,5 +1,6 @@
 import { WebSocket, WebSocketServer } from "ws";
 import jwt, { JwtPayload } from "jsonwebtoken";
+import { prisma } from "@repo/db/client"
 
 const wss = new WebSocketServer({ port: 8080 });
 const JWT_TOKEN = process.env.JWT_SECRET_TOKEN || "helloDrawisly";
@@ -28,9 +29,6 @@ interface Room {
 
 const clients = new Map<string, User>(); // userId -> User
 const rooms = new Map<string, Room>();   // roomId -> Room
-
-
-
 
 wss.on("connection", async (socket: WebSocket, req: Request) => {
   try {
@@ -122,40 +120,137 @@ wss.on("connection", async (socket: WebSocket, req: Request) => {
   }
 });
 
-function handleJoin(roomId: string, user: User) {
+async function handleJoin(roomId: string, user: User) {
+  const roomRecord = await prisma.room.findUnique({
+    where:
+    {
+      joincode: roomId
+    },
+    select: {
+      id: true,
+      participants: {
+        select: {
+          id: true
+        }
+      }
+    },
+  });
+
+  if (!roomRecord) {
+    console.warn(`❌ Room ${roomId} not found`);
+    return;
+  }
+
   user.rooms.add(roomId);
+
   if (!rooms.has(roomId)) {
     rooms.set(roomId, {
-      roomId, participants: new Set()
-    })
+      roomId,
+      participants: new Set(),
+    });
   }
-  const foundedRoom = rooms.get(roomId)!
-  foundedRoom.participants.add(user.userId)
 
-  console.log(`User ${user.userId} joined room ${roomId}`);
+  const room = rooms.get(roomId)!;
+
+  await prisma.room.update({
+    where: {
+      joincode: roomId
+    },
+    data: {
+      participants: {
+        connect: {
+          id: user.userId
+        }
+      },
+    },
+  });
+
+  const updatedRoom = await prisma.room.findUnique({
+    where: {
+      joincode: roomId
+    },
+    select: {
+      participants: {
+        select: {
+          id: true
+        }
+      }
+    },
+  });
+
+  const isInRoom = updatedRoom?.participants.some(p => p.id === user.userId);
+
+  if (!isInRoom) {
+    console.error(`❌ Failed to add user ${user.userId} to room ${roomId} in DB`);
+    return;
+  }
+
+  room.participants.add(user.userId);
+
+  console.log(`✅ User ${user.userId} joined room ${roomId}`);
+
   brodCast(roomId, {
     type: "info",
-    content: `User ${user.userId} joined the room`
-  })
+    content: `User ${user.userId} joined the room`,
+  });
 }
 
-function leaveRoom(roomId: string, user: User) {
+async function leaveRoom(roomId: string, user: User) {
+  const checkRoomExist = await prisma.room.findUnique({
+    where: {
+      joincode: roomId
+    }
+  })
+  if (!checkRoomExist) {
+    return;
+  }
   user.rooms.delete(roomId)
   const foundedRoom = rooms.get(roomId)!
-  console.log("founded room : ",foundedRoom);
-  
+  console.log("founded room : ", foundedRoom);
+
 
   foundedRoom.participants.delete(user.userId)
   console.log(`User ${user.userId} left room ${roomId}`);
-  brodCast(roomId, { 
-    type: "info",
-    content: `User ${user.userId} left the room` 
+  brodCast(roomId, {
+    content: `User ${user.userId} left the room`
   })
 }
 
-function chatRoom(user: User, roomId: string, content: string) {
+async function chatRoom(user: User, roomId: string, content: string) {
   console.log(`💬 [${roomId}] ${user.userId}: ${content}`);
-  brodCast(roomId, { type: "chat", userId: user.userId, content });
+
+  if (!content.trim()) return;
+
+  const room = await prisma.room.findUnique({
+    where: { joincode: roomId },
+    select: { id: true },
+  });
+  if (!room) {
+    console.warn(`❌ Room ${roomId} not found`);
+    return;
+  }
+
+  await prisma.chat.create({
+    data: {
+      content,
+      user: {
+        connect: {
+          id: user.userId
+        }
+      },
+      room: {
+        connect: {
+          id: room.id
+        }
+      },
+    },
+  });
+
+  brodCast(roomId, {
+    type: "chat",
+    userId: user.userId,
+    content,
+  });
 }
 
 function brodCast(roomId: string, data: any) {
