@@ -270,3 +270,5 @@ function brodCast(roomId: string, data: any) {
     }
   }
 }
+
+// What is race condition
