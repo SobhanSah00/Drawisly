@@ -9,13 +9,21 @@ config({
     path: path.resolve(__dirname, "../../../.env")
 })
 
-app.use(express.json())
-app.use(cookieparser())
-app.use(cors({
-    origin: process.env.CORS_ORIGIN,
-    credentials: true
-}))
-app.use(express.urlencoded({extended : true,limit : '8mb'}))
+
+app.use(
+  cors({
+    origin: "http://localhost:3000", // your Next.js URL
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true, limit: "8mb" }));
+app.use(cookieparser());
+
 
 
 import userRouter from "./routes/user.route"
@@ -29,3 +37,4 @@ app.use("/api/v1/chat",chatRouter)
 app.use("/api/v1/draw",drawRouter)
 
 export default app
+
