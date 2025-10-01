@@ -230,3 +230,33 @@ export async function fetchAllRoomOfAdminController(req: Request, res: Response)
 
 
 }
+
+export async function fetchRoomIdByJoinCode(req: Request, res: Response) {
+  const {slug} = req.params;
+
+  if(!slug) {
+    res.status(400).json({
+      message : "Please give the slug/joincode"
+    })
+  }
+
+  try {
+    const roomId = await prisma.room.findUnique({
+      where : {
+        joincode : slug
+      },
+      select : {
+        id : true
+      }
+    })
+  
+    res.status(200).json({
+      message : "room Id is fetched successfully from the given slug",
+      roomId
+    })
+  } catch (error) {
+    res.status(500).json({
+      message : "Internal Server Error ."
+    })
+  }
+}

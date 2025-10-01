@@ -3,10 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function SignUpPage() {
-  const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+export default function SignInPage() {
+  const [username, setUsername] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
   const [message, setMessage] = useState("");
 
   const router = useRouter()
@@ -15,14 +14,13 @@ export default function SignUpPage() {
     e.preventDefault();
 
     try {
-      const res = await fetch("http://localhost:5050/api/v1/auth/signup", {
+      const res = await fetch("http://localhost:5050/api/v1/auth/signin", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         credentials: "include", // 🔥 VERY IMPORTANT for cookies
         body: JSON.stringify({
-          email,
           username,
           password,
         }),
@@ -30,14 +28,13 @@ export default function SignUpPage() {
 
       const data = await res.json();
       if (res.ok) {
-        setMessage("Signup successful ✅");
+        setMessage("Signin successful ✅");
         setUsername("")
-        setEmail("")
         setPassword("")
         router.push("/dashboard")
         console.log("User:", data.user);
       } else {
-        setMessage(data.error || data.message || "Signup failed ❌");
+        setMessage(data.error || data.message || "Signin failed ❌");
       }
     } catch (err) {
       console.error("Error:", err);
@@ -47,20 +44,13 @@ export default function SignUpPage() {
 
   return (
     <div style={{ maxWidth: 400, margin: "100px auto" }}>
-      <h2>Sign Up</h2>
+      <h2>Sign in</h2>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         <input
-          type="text"
-          placeholder="Username"
+          type="username"
+          placeholder="username"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          required
-        />
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
           required
         />
         <input
@@ -70,7 +60,7 @@ export default function SignUpPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        <button type="submit">Sign Up</button>
+        <button style={{cursor : "pointer"}} type="submit">Sign In</button>
       </form>
       {message && <p>{message}</p>}
     </div>
