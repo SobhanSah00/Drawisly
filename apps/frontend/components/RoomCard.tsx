@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 interface RoomCardProps {
   room: {
     id: string;
@@ -16,6 +17,7 @@ interface RoomCardProps {
 }
 
 export default function RoomCard({ room }: RoomCardProps) {
+  const router = useRouter()
   const latestChat = room.chat?.[0];
   const lastMessage = latestChat
     ? `${latestChat.user.username}: ${latestChat.content}`
@@ -23,16 +25,21 @@ export default function RoomCard({ room }: RoomCardProps) {
 
   const formattedDate = new Date(room.createdat).toLocaleString();
 
+  const handleDashBorardToRoom = (joinCode : string) => {
+    router.push(`dashboard/${joinCode}`)
+  }
+
   return (
-    <div
+    <button
       style={{
         border: "1px solid #ccc",
         borderRadius: "8px",
         padding: "1rem",
         background: "black",
-        color : "white"
-        
+        color: "white"
+
       }}
+      onClick={ () => handleDashBorardToRoom(room.joincode)}
     >
       <h3>{room.title}</h3>
       <p>
@@ -47,6 +54,6 @@ export default function RoomCard({ room }: RoomCardProps) {
       <p>
         <strong>Created:</strong> {formattedDate}
       </p>
-    </div>
+    </button>
   );
 }

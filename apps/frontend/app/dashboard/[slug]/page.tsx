@@ -11,28 +11,18 @@ interface Drawing {
   createdAt: string;
 }
 
-interface Chat {
-  id: string;
-  content: string;
-  createdAt: string;
-  user: {
-    username: string;
-  };
-}
-
 export default function RoomDetailPage() {
-  const { slug } = useParams(); // dynamic joincode
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5050";
+  const { slug } = useParams();
+  const API_URL = "http://localhost:5050";
 
-  const [roomId, setRoomId] = useState<string | null>(null);
+  const [roomId, setRoomId] = useState<string>("");
   const [drawings, setDrawings] = useState<Drawing[]>([]);
-  const [chats, setChats] = useState<Chat[]>([]);
   const [showChat, setShowChat] = useState(true);
   const [loading, setLoading] = useState(true);
 
-  // 1️⃣ Fetch roomId using slug
   useEffect(() => {
     if (!slug) return;
+    
     const fetchRoomId = async () => {
       try {
         const res = await fetch(`${API_URL}/api/v1/room/slugToRoomId/${slug}`, {
@@ -49,57 +39,62 @@ export default function RoomDetailPage() {
     fetchRoomId();
   }, [slug]);
 
-  // 2️⃣ Once roomId available → fetch drawings + chats
   useEffect(() => {
     if (!roomId) return;
 
-    const fetchData = async () => {
+    const fetchDrawings = async () => {
       setLoading(true);
       try {
-        const [drawRes, chatRes] = await Promise.all([
-          fetch(`${API_URL}/api/v1/draw/AllDraw/${roomId}`, { credentials: "include" }),
-          fetch(`${API_URL}/api/v1/chat/chatDetails/${roomId}`, { credentials: "include" }),
-        ]);
-
-        const [drawData, chatData] = await Promise.all([
-          drawRes.json(),
-          chatRes.json(),
-        ]);
+        const drawRes = await fetch(`${API_URL}/api/v1/draw/AllDraw/${roomId}`, {
+          credentials: "include",
+        });
+        const drawData = await drawRes.json();
 
         if (drawRes.ok) setDrawings(drawData.AllDrawings || []);
-        if (chatRes.ok) setChats(chatData.chats || []);
       } catch (err) {
-        console.error("Error fetching room data", err);
+        console.error("Error fetching drawings", err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    fetchDrawings();
   }, [roomId]);
 
-  if (loading) return <p style={{ textAlign: "center", marginTop: "2rem" }}>Loading room...</p>;
+  if (loading) {
+    return (
+      <p style={{ textAlign: "center", marginTop: "2rem", color: "white" }}>
+        Loading room...
+      </p>
+    );
+  }
 
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 80px)" }}>
-      {/* 🎨 Drawing Section */}
-      <div style={{ flex: showChat ? 0.7 : 1, transition: "all 0.3s ease" }}>
+    <div style={{ display: "flex", height: "calc(100vh - 80px)", background: "#0a0a0a" }}>
+      {/* Drawing Panel */}
+      <div
+        style={{
+          flex: showChat ? 0.7 : 1,
+          transition: "all 0.3s ease",
+          position: "relative",
+        }}
+      >
         <DrawingPanel drawings={drawings} />
       </div>
 
-      {/* 💬 Collapsible Chat Section */}
+      {/* Chat Panel */}
       <div
         style={{
           flex: showChat ? 0.3 : 0,
           transition: "all 0.3s ease",
           overflow: "hidden",
-          borderLeft: showChat ? "1px solid #ddd" : "none",
-          background: "#fafafa",
+          borderLeft: showChat ? "1px solid #333" : "none",
+          background: "#1a1a1a",
           display: "flex",
           flexDirection: "column",
         }}
       >
-        {showChat && <ChatPanel chats={chats} />}
+        {showChat && roomId && <ChatPanel roomId={roomId} apiUrl={API_URL} />}
       </div>
 
       {/* Toggle Chat Button */}
@@ -107,7 +102,7 @@ export default function RoomDetailPage() {
         onClick={() => setShowChat((prev) => !prev)}
         style={{
           position: "absolute",
-          right: showChat ? "32%" : "1rem",
+          right: showChat ? "calc(30% + 1rem)" : "1rem",
           top: "1rem",
           backgroundColor: "#0070f3",
           color: "white",
@@ -116,6 +111,15 @@ export default function RoomDetailPage() {
           border: "none",
           cursor: "pointer",
           zIndex: 100,
+          fontWeight: "500",
+          transition: "all 0.3s ease",
+          boxShadow: "0 2px 8px rgba(0, 112, 243, 0.3)",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = "#0051cc";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = "#0070f3";
         }}
       >
         {showChat ? "Hide Chat" : "Show Chat"}
