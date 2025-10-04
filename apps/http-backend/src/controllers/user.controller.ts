@@ -1,8 +1,9 @@
 import { prisma } from "@repo/db/client"
 import { UserSignUpSchema, UserSignInSchema } from "@repo/common/type"
-import { Request, Response, RequestHandler } from "express"
+import { Request, Response } from "express"
 import { hashPassword, comparePassword } from "../utils/hash.util";
 import { generateJwtToken } from "../utils/jwt.util";
+import { verifiToken } from "../utils/jwt.util"
 
 export async function signUpController(req: Request, res: Response) {
   const validatedInput = UserSignUpSchema.safeParse(req.body);
@@ -154,4 +155,20 @@ export async function getCurrentUser(req: Request, res: Response) {
       message: "Error faced while getting user info, try again"
     })
   }
+}
+
+export async function getToken(req: Request, res: Response) {
+  let token = req.cookies['jwt'];
+
+  if (!token) {
+    res.status(401).json({
+      message: "User is not authorized ."
+    })
+    return;
+  }
+
+  res.status(200).json({
+    message : "Token Fetched SuccessFully",
+    token
+  })
 }

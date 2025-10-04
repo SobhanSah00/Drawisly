@@ -1,37 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
+import useExtractToken from "./useExtractToken";
 
-export function useWebSocket(roomId?: string) {
-  const [messages, setMessages] = useState<any[]>([]);
-  const socketRef = useRef<WebSocket | null>(null);
+export function useWebSocket() {
+  const [token] = useExtractToken();
+  const wsRef = useRef<WebSocket | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("token"); // or skip if using cookies
-    const url = `ws://localhost:8080?token=${token}${roomId ? `&roomId=${roomId}` : ""}`;
+    if (!token) return;
 
-    const ws = new WebSocket(url);
-    socketRef.current = ws;
+    const ws = new WebSocket(`ws://localhost:8080?token=${token}`);
+    wsRef.current = ws;
 
-    ws.onopen = () => console.log("🔗 Connected to WebSocket");
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log("📩 Message:", data);
-      setMessages((prev) => [...prev, data]);
+    ws.onopen = () => {
+      console.log("🔗 Connected to WebSocket");
+      setIsConnected(true);
     };
-    ws.onclose = () => console.log("❌ Disconnected");
+
+    ws.onclose = () => setIsConnected(false);
     ws.onerror = (err) => console.error("⚠️ WebSocket error:", err);
 
-    return () => {
-      ws.close();
-    };
-  }, [roomId]);
+    return () => ws.close();
+  }, [token]);
 
-  const sendMessage = useCallback((type: string, content: any) => {
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type, content }));
-    }
-  }, []);
-
-  return { socket: socketRef.current, messages, sendMessage };
+  return { ws: wsRef.current, isConnected };
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { useWebSocket } from "@/hooks/useSocket";
+import { ParamValue } from "next/dist/server/request/params";
 import { useEffect, useState, useRef, useCallback } from "react";
 
 interface Chat {
@@ -14,18 +16,19 @@ interface Chat {
 interface ChatPanelProps {
   roomId: string;
   apiUrl: string;
+  slug: ParamValue;
 }
 
-export default function ChatPanel({ roomId, apiUrl }: ChatPanelProps) {
+export default function ChatPanel({ roomId, apiUrl, slug }: ChatPanelProps) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [initialLoad, setInitialLoad] = useState(true);
+  const { ws, isConnected } = useWebSocket();
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
   const prevScrollHeight = useRef<number>(0);
 
   const fetchChats = useCallback(
@@ -62,7 +65,8 @@ export default function ChatPanel({ roomId, apiUrl }: ChatPanelProps) {
             setTimeout(() => {
               if (scrollRef.current && prevScrollHeight.current > 0) {
                 const newScrollHeight = scrollRef.current.scrollHeight;
-                scrollRef.current.scrollTop = newScrollHeight - prevScrollHeight.current;
+                scrollRef.current.scrollTop =
+                  newScrollHeight - prevScrollHeight.current;
               }
             }, 0);
           }
@@ -80,6 +84,50 @@ export default function ChatPanel({ roomId, apiUrl }: ChatPanelProps) {
   );
 
   useEffect(() => {
+    if (!ws || !isConnected) return;
+
+    ws.send(JSON.stringify({ type: "join_room", roomId: slug }));
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === "chat") {
+          const newChat: Chat = {
+            id: data.id ,
+            content: data.content,
+            createdAt: data.createdAt || new Date().toISOString(),
+            user: {
+              username: data.user?.username ?? "Unknown",
+            },
+          };
+
+          setChats((prev) => [newChat, ...prev]);
+          
+          setTimeout(() => {
+            if (scrollRef.current) {
+              const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+              const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+              if (isNearBottom) {
+                scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+              }
+            }
+          }, 0);
+        }
+      } catch (err) {
+        console.error("Error parsing WebSocket message:", err);
+      }
+    };
+
+    ws.addEventListener("message", handleMessage);
+
+    return () => {
+      ws.removeEventListener("message", handleMessage);
+      ws.send(JSON.stringify({ type: "leave_room", roomId: slug }));
+    };
+  }, [ws, isConnected, slug]);
+
+  useEffect(() => {
     if (!roomId) return;
 
     setChats([]);
@@ -87,51 +135,6 @@ export default function ChatPanel({ roomId, apiUrl }: ChatPanelProps) {
     setHasMore(true);
     setInitialLoad(true);
     fetchChats(true);
-
-    // const ws = new WebSocket(`ws://localhost:8080`);
-
-    // ws.onopen = () => {
-    //   console.log("WebSocket connected");
-    //   ws.send(JSON.stringify({ type: "join", roomId }));
-    // };
-
-    // ws.onmessage = (event) => {
-    //   try {
-    //     const data = JSON.parse(event.data);
-    //     if (data.type === "newMessage" || data.type === "message") {
-    //       const newMessage = data.message || data;
-    //       setChats((prev) => [newMessage, ...prev]);
-    //       setTimeout(() => {
-    //         if (scrollRef.current) {
-    //           const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-    //           const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
-    //           if (isNearBottom) {
-    //             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    //           }
-    //         }
-    //       }, 50);
-    //     }
-    //   } catch (err) {
-    //     console.error("WebSocket message parse error", err);
-    //   }
-    // };
-
-    // ws.onerror = (error) => {
-    //   console.error("WebSocket error", error);
-    // };
-
-    // ws.onclose = () => {
-    //   console.log("WebSocket disconnected");
-    // };
-
-    // wsRef.current = ws;
-
-    // return () => {
-    //   if (wsRef.current) {
-    //     wsRef.current.close();
-    //     wsRef.current = null;
-    //   }
-    // };
   }, [roomId]);
 
   const handleScroll = useCallback(() => {
@@ -151,11 +154,12 @@ export default function ChatPanel({ roomId, apiUrl }: ChatPanelProps) {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim() || !wsRef.current) return;
-    wsRef.current.send(
+    if (!message.trim() || !ws || !isConnected) return;
+
+    ws.send(
       JSON.stringify({
         type: "chat",
-        roomId,
+        roomId: slug,
         content: message.trim(),
       })
     );
@@ -178,7 +182,9 @@ export default function ChatPanel({ roomId, apiUrl }: ChatPanelProps) {
           background: "#0f0f0f",
         }}
       >
-        <h2 style={{ margin: 0, color: "white", fontSize: "1.25rem" }}>💬 Chat</h2>
+        <h2 style={{ margin: 0, color: "white", fontSize: "1.25rem" }}>
+          💬 Chat
+        </h2>
       </div>
 
       <div
@@ -193,19 +199,39 @@ export default function ChatPanel({ roomId, apiUrl }: ChatPanelProps) {
         }}
       >
         {loading && cursor && (
-          <div style={{ textAlign: "center", color: "#888", padding: "0.5rem", fontSize: "0.875rem" }}>
+          <div
+            style={{
+              textAlign: "center",
+              color: "#888",
+              padding: "0.5rem",
+              fontSize: "0.875rem",
+            }}
+          >
             Loading older messages...
           </div>
         )}
 
         {!hasMore && chats.length > 0 && (
-          <div style={{ textAlign: "center", color: "#666", padding: "0.5rem", fontSize: "0.875rem" }}>
+          <div
+            style={{
+              textAlign: "center",
+              color: "#666",
+              padding: "0.5rem",
+              fontSize: "0.875rem",
+            }}
+          >
             📜 No more messages
           </div>
         )}
 
         {chats.length === 0 && !loading && (
-          <div style={{ color: "#888", textAlign: "center", padding: "2rem 1rem" }}>
+          <div
+            style={{
+              color: "#888",
+              textAlign: "center",
+              padding: "2rem 1rem",
+            }}
+          >
             No messages yet. Start the conversation!
           </div>
         )}
@@ -239,7 +265,14 @@ export default function ChatPanel({ roomId, apiUrl }: ChatPanelProps) {
                 })}
               </small>
             </div>
-            <p style={{ margin: 0, wordBreak: "break-word", lineHeight: "1.5", fontSize: "0.95rem" }}>
+            <p
+              style={{
+                margin: 0,
+                wordBreak: "break-word",
+                lineHeight: "1.5",
+                fontSize: "0.95rem",
+              }}
+            >
               {msg.content}
             </p>
           </div>
@@ -259,7 +292,6 @@ export default function ChatPanel({ roomId, apiUrl }: ChatPanelProps) {
           borderTop: "1px solid #333",
           display: "flex",
           gap: "0.5rem",
-          background: "#0f0f0f",
         }}
       >
         <input
@@ -280,14 +312,14 @@ export default function ChatPanel({ roomId, apiUrl }: ChatPanelProps) {
         />
         <button
           type="submit"
-          disabled={!message.trim()}
+          disabled={!message.trim() || !isConnected}
           style={{
             padding: "0.75rem 1.5rem",
             borderRadius: "6px",
             border: "none",
-            background: message.trim() ? "#0070f3" : "#444",
+            background: message.trim() && isConnected ? "#0070f3" : "#444",
             color: "white",
-            cursor: message.trim() ? "pointer" : "not-allowed",
+            cursor: message.trim() && isConnected ? "pointer" : "not-allowed",
             fontWeight: "500",
             fontSize: "0.95rem",
           }}

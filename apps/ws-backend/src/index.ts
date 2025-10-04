@@ -18,6 +18,7 @@ enum MessageType {
 
 interface User {
   userId: string;
+  username: string;
   ws: WebSocket;
   rooms: Set<string>;
 }
@@ -65,6 +66,7 @@ wss.on("connection", async (socket: WebSocket, req: Request) => {
 
     const user: User = {
       userId,
+      username: decoded.username,
       ws: socket,
       rooms: new Set()
     }
@@ -191,7 +193,7 @@ async function handleJoin(roomId: string, user: User) {
 
   brodCast(roomId, {
     type: "info",
-    content: `User ${user.userId} joined the room`,
+    content: `User ${user.username} joined the room`,
   });
 }
 
@@ -210,9 +212,9 @@ async function leaveRoom(roomId: string, user: User) {
 
 
   foundedRoom.participants.delete(user.userId)
-  console.log(`User ${user.userId} left room ${roomId}`);
+  console.log(`User ${user.username} left room ${roomId}`);
   brodCast(roomId, {
-    content: `User ${user.userId} left the room`
+    content: `User ${user.username} left the room`
   })
 }
 
@@ -230,7 +232,7 @@ async function chatRoom(user: User, roomId: string, content: string) {
     return;
   }
 
-  await prisma.chat.create({
+  const savedChat = await prisma.chat.create({
     data: {
       content,
       user: {
@@ -244,12 +246,28 @@ async function chatRoom(user: User, roomId: string, content: string) {
         }
       },
     },
+    select: {
+      id: true,
+      content: true,
+      createdAt: true,
+      user: {
+        select: {
+          id: true,
+          username: true
+        }
+      }
+    }
   });
 
   brodCast(roomId, {
     type: "chat",
-    userId: user.userId,
-    content,
+    id: savedChat.id,
+    content: savedChat.content,
+    createdAt: savedChat.createdAt.toISOString(),
+    user: {
+      id: savedChat.user.id,
+      username: savedChat.user.username
+    }
   });
 }
 

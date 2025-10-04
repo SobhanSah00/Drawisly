@@ -94,7 +94,7 @@ export default function RoomDetailPage() {
           flexDirection: "column",
         }}
       >
-        {showChat && roomId && <ChatPanel roomId={roomId} apiUrl={API_URL} />}
+        {showChat && roomId && <ChatPanel roomId={roomId} apiUrl={API_URL} slug={slug}/>}
       </div>
 
       {/* Toggle Chat Button */}
