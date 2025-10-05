@@ -91,6 +91,10 @@ wss.on("connection", async (socket: WebSocket, req: Request) => {
             if (!parsedMessage.roomId) return;
             chatRoom(user, parsedMessage.roomId, parsedMessage.content)
             break;
+          case MessageType.DRAW:
+            if (!parsedMessage.roomId || !parsedMessage.element) return;
+            handleDraw(user, parsedMessage.roomId, parsedMessage.element)
+            break;
           default:
             user.ws.send(JSON.stringify({ type: MessageType.ERROR, content: "Unknown message type" }));
 
@@ -214,6 +218,7 @@ async function leaveRoom(roomId: string, user: User) {
   foundedRoom.participants.delete(user.userId)
   console.log(`User ${user.username} left room ${roomId}`);
   brodCast(roomId, {
+    type: "info",
     content: `User ${user.username} left the room`
   })
 }
@@ -271,6 +276,90 @@ async function chatRoom(user: User, roomId: string, content: string) {
   });
 }
 
+async function handleDraw(user: User, roomId: string, element: any) {
+  console.log(`🎨 [${roomId}] ${user.userId}:`, element);
+
+  const room = await prisma.room.findUnique({
+    where: { joincode: roomId },
+    select: { id: true },
+  });
+
+  if (!room) {
+    console.warn(`❌ Room ${roomId} not found`);
+    return;
+  }
+
+  const validShapes = [
+    "rectangle",
+    "diamond",
+    "circle",
+    "line",
+    "arrow",
+    "text",
+    "freeHand",
+  ] as const;
+
+  if (!validShapes.includes(element.shape)) {
+    console.warn(`⚠️ Invalid shape: ${element.shape}`);
+    return;
+  }
+
+  const drawedShapes = await prisma.draw.create({
+    data: {
+      shape: element.shape,
+      strokeStyle: element.strokeStyle,
+      fillStyle: element.fillStyle,
+      lineWidth: element.lineWidth,
+
+      startX: element.startX ?? null,
+      startY: element.startY ?? null,
+      endX: element.endX ?? null,
+      endY: element.endY ?? null,
+
+      font: element.font ?? null,
+      fontSize: element.fontSize ?? null,
+      text: element.text ?? null,
+      points: element.points ?? null,
+
+      roomId: room.id,
+    },
+    select: {
+      id: true,
+      shape: true,
+      strokeStyle: true,
+      fillStyle: true,
+      lineWidth: true,
+      font: true,
+      fontSize: true,
+      startX: true,
+      startY: true,
+      endX: true,
+      endY: true,
+      text: true,
+      points: true
+    }
+  });
+
+  console.log(`✅ Draw saved for room ${roomId}`);
+
+  brodCast(roomId, {
+    type: "draw",
+    id: drawedShapes.id,
+    shape: drawedShapes.shape,
+    strokeStyle: drawedShapes.strokeStyle,
+    fillStyle: drawedShapes.shape,
+    lineWidth: drawedShapes.fillStyle,
+    font: drawedShapes.font,
+    fontSize: drawedShapes.fontSize,
+    startX: drawedShapes.startX,
+    startY: drawedShapes.startY,
+    endX: drawedShapes.endX,
+    endY: drawedShapes.endY,
+    text: drawedShapes.text,
+    points: drawedShapes.points
+  })
+}
+
 function brodCast(roomId: string, data: any) {
   const room = rooms.get(roomId)
 
@@ -290,3 +379,18 @@ function brodCast(roomId: string, data: any) {
 }
 
 // What is race condition
+
+// {
+//   "type": "draw",
+//   "roomId": "6JB3CNQ",
+//   "element": {
+//     "shape": "arrow",
+//     "strokeStyle": "#ff6b35",
+//     "fillStyle": "transparent",
+//     "lineWidth": 2,
+//     "startX": 447,
+//     "startY": 331,
+//     "endX": 447,
+//     "endY": 331
+//   }
+// }

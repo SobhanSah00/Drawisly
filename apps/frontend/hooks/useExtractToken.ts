@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react'
 const API_URL = "http://localhost:5050/api/v1/auth"
 
 export default function useExtractToken() {
-    const [token, setToken] = useState<any>()
+    const [token, setToken] = useState<string>()
 
     useEffect(() => {
         const handleGetToken = async () => {

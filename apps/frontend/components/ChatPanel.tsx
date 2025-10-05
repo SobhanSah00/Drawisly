@@ -3,6 +3,7 @@
 import { useWebSocket } from "@/hooks/useSocket";
 import { ParamValue } from "next/dist/server/request/params";
 import { useEffect, useState, useRef, useCallback } from "react";
+import { Send, Loader2 } from "lucide-react";
 
 interface Chat {
   id: string;
@@ -83,6 +84,7 @@ export default function ChatPanel({ roomId, apiUrl, slug }: ChatPanelProps) {
     [roomId, cursor, hasMore, loading, apiUrl]
   );
 
+  // Join room and listen for messages
   useEffect(() => {
     if (!ws || !isConnected) return;
 
@@ -91,19 +93,21 @@ export default function ChatPanel({ roomId, apiUrl, slug }: ChatPanelProps) {
     const handleMessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
-        
+
+        console.log("📩 Received WebSocket message:", data);
+
         if (data.type === "chat") {
           const newChat: Chat = {
-            id: data.id ,
+            id: data.id || `temp-${Date.now()}`,
             content: data.content,
             createdAt: data.createdAt || new Date().toISOString(),
             user: {
-              username: data.user?.username ?? "Unknown",
+              username: data.user?.username || "Unknown",
             },
           };
 
           setChats((prev) => [newChat, ...prev]);
-          
+
           setTimeout(() => {
             if (scrollRef.current) {
               const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
@@ -113,6 +117,8 @@ export default function ChatPanel({ roomId, apiUrl, slug }: ChatPanelProps) {
               }
             }
           }, 0);
+        } else if (data.type === "info") {
+          console.log("ℹ️ Info:", data.content);
         }
       } catch (err) {
         console.error("Error parsing WebSocket message:", err);
@@ -167,71 +173,35 @@ export default function ChatPanel({ roomId, apiUrl, slug }: ChatPanelProps) {
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        background: "#1a1a1a",
-      }}
-    >
-      <div
-        style={{
-          padding: "1rem",
-          borderBottom: "1px solid #333",
-          background: "#0f0f0f",
-        }}
-      >
-        <h2 style={{ margin: 0, color: "white", fontSize: "1.25rem" }}>
-          💬 Chat
+    <div className="flex flex-col h-full bg-[#1a1a1a]">
+      {/* Header */}
+      <div className="p-4 border-b border-[#333] bg-[#0f0f0f]">
+        <h2 className="text-white text-xl font-semibold flex items-center gap-2">
+          <span className="text-2xl">💬</span>
+          <span>Chat</span>
         </h2>
       </div>
 
+      {/* Messages */}
       <div
         ref={scrollRef}
-        style={{
-          flex: 1,
-          padding: "1rem",
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column-reverse",
-          gap: "0.5rem",
-        }}
+        className="flex-1 p-4 overflow-y-auto flex flex-col-reverse gap-2"
       >
         {loading && cursor && (
-          <div
-            style={{
-              textAlign: "center",
-              color: "#888",
-              padding: "0.5rem",
-              fontSize: "0.875rem",
-            }}
-          >
+          <div className="text-center text-gray-500 py-2 text-sm flex items-center justify-center gap-2">
+            <Loader2 size={14} className="animate-spin" />
             Loading older messages...
           </div>
         )}
 
         {!hasMore && chats.length > 0 && (
-          <div
-            style={{
-              textAlign: "center",
-              color: "#666",
-              padding: "0.5rem",
-              fontSize: "0.875rem",
-            }}
-          >
+          <div className="text-center text-gray-600 py-2 text-sm">
             📜 No more messages
           </div>
         )}
 
         {chats.length === 0 && !loading && (
-          <div
-            style={{
-              color: "#888",
-              textAlign: "center",
-              padding: "2rem 1rem",
-            }}
-          >
+          <div className="text-gray-500 text-center py-8 px-4">
             No messages yet. Start the conversation!
           </div>
         )}
@@ -239,92 +209,53 @@ export default function ChatPanel({ roomId, apiUrl, slug }: ChatPanelProps) {
         {chats.map((msg) => (
           <div
             key={msg.id}
-            style={{
-              padding: "0.75rem",
-              background: "#2a2a2a",
-              color: "white",
-              borderRadius: "8px",
-              border: "1px solid #333",
-            }}
+            className="p-3 bg-[#2a2a2a] text-white rounded-lg border border-[#333] hover:border-[#444] transition-colors"
           >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "0.5rem",
-              }}
-            >
-              <strong style={{ color: "#60a5fa", fontSize: "0.9rem" }}>
+            <div className="flex justify-between items-center mb-2">
+              <strong className="text-[#ff6b35] text-sm font-medium">
                 {msg.user.username}
               </strong>
-              <small style={{ color: "#888", fontSize: "0.75rem" }}>
+              <small className="text-gray-500 text-xs">
                 {new Date(msg.createdAt).toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
               </small>
             </div>
-            <p
-              style={{
-                margin: 0,
-                wordBreak: "break-word",
-                lineHeight: "1.5",
-                fontSize: "0.95rem",
-              }}
-            >
+            <p className="text-gray-100 break-words leading-relaxed text-[15px]">
               {msg.content}
             </p>
           </div>
         ))}
 
         {loading && !cursor && (
-          <div style={{ textAlign: "center", color: "#888", padding: "2rem" }}>
+          <div className="text-center text-gray-500 py-8 flex items-center justify-center gap-2">
+            <Loader2 size={20} className="animate-spin" />
             Loading messages...
           </div>
         )}
       </div>
 
+      {/* Input */}
       <form
         onSubmit={handleSendMessage}
-        style={{
-          padding: "1rem",
-          borderTop: "1px solid #333",
-          display: "flex",
-          gap: "0.5rem",
-        }}
+        className="p-4 border-t border-[#333] flex gap-2"
       >
         <input
           type="text"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Type a message..."
-          style={{
-            flex: 1,
-            padding: "0.75rem",
-            borderRadius: "6px",
-            border: "1px solid #444",
-            background: "#2a2a2a",
-            color: "white",
-            outline: "none",
-            fontSize: "0.95rem",
-          }}
+          disabled={!isConnected}
+          className="flex-1 px-4 py-3 rounded-lg border border-[#444] bg-[#2a2a2a] text-white outline-none focus:border-[#ff6b35] focus:ring-1 focus:ring-[#ff6b35] transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-500"
         />
         <button
           type="submit"
           disabled={!message.trim() || !isConnected}
-          style={{
-            padding: "0.75rem 1.5rem",
-            borderRadius: "6px",
-            border: "none",
-            background: message.trim() && isConnected ? "#0070f3" : "#444",
-            color: "white",
-            cursor: message.trim() && isConnected ? "pointer" : "not-allowed",
-            fontWeight: "500",
-            fontSize: "0.95rem",
-          }}
+          className="px-6 py-3 rounded-lg border-none bg-[#ff6b35] text-white cursor-pointer font-medium transition-all hover:bg-[#e55a2b] disabled:bg-[#444] disabled:cursor-not-allowed flex items-center gap-2 shadow-lg hover:shadow-xl"
         >
-          Send
+          <Send size={18} />
+          <span className="hidden sm:inline">Send</span>
         </button>
       </form>
     </div>
