@@ -50,8 +50,6 @@ export default function RoomDetailPage() {
           credentials: "include",
         });
         const drawData = await drawRes.json();
-        console.log(drawData);
-        
 
         if (drawRes.ok) setDrawings(drawData.AllDrawings || []);
       } catch (err) {

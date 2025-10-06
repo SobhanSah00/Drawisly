@@ -81,33 +81,6 @@ export default function DrawingPanel({ drawings, roomId, slug }: DrawingPanelPro
   
   const { ws, isConnected } = useWebSocket();
 
-  // Listen for WebSocket messages
-  useEffect(() => {
-    if (!ws || !isConnected) return;
-
-    ws.send(JSON.stringify({ type: "join_room", roomId: slug }));
-
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === "draw" && data.element) {
-          // Add received drawing to elements
-          setElements((prev) => [...prev, data.element]);
-        }
-      } catch (err) {
-        console.error("Error parsing WebSocket drawing message:", err);
-      }
-    };
-
-    ws.addEventListener("message", handleMessage);
-
-    return () => {
-      ws.removeEventListener("message", handleMessage);
-      ws.send(JSON.stringify({ type: "leave_room", roomId: slug }));
-    };
-  }, [ws, isConnected,slug]);
-
   // Initialize canvas
   useEffect(() => {
     const canvas = canvasRef.current;
