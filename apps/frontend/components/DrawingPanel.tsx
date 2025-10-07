@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useWebSocket } from "@/hooks/useSocket";
-import { 
-  Square, 
-  Circle, 
-  Minus, 
-  ArrowRight, 
-  Type, 
-  Pencil, 
+import {
+  Square,
+  Circle,
+  Minus,
+  ArrowRight,
+  Type,
+  Pencil,
   Diamond,
   MousePointer2,
   Trash2,
@@ -67,21 +67,48 @@ export default function DrawingPanel({ drawings, roomId, slug }: DrawingPanelPro
   const [isDrawing, setIsDrawing] = useState(false);
   const [elements, setElements] = useState<DrawElement[]>([]);
   const [currentElement, setCurrentElement] = useState<DrawElement | null>(null);
-  
+
   // Styles
   const [strokeColor, setStrokeColor] = useState("#ff6b35");
   const [fillColor, setFillColor] = useState("transparent");
   const [lineWidth, setLineWidth] = useState(2);
-  
+
   // Camera controls
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
-  
+
   const { ws, isConnected } = useWebSocket();
 
-  // Initialize canvas
+  // ✅ Initialize elements from DB (drawings prop)
+  useEffect(() => {
+    if (drawings && drawings.length > 0) {
+      const formatted = drawings.map((d: any) => d.data || d);
+      setElements(formatted);
+    }
+  }, [drawings]);
+
+  // ✅ WS message listener
+  useEffect(() => {
+    if (!ws) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "draw" && data.element) {
+          setElements((prev) => [...prev, data.element]);
+        }
+      } catch (err) {
+        console.error("Invalid WS message", err);
+      }
+    };
+
+    ws.addEventListener("message", handleMessage);
+    return () => ws.removeEventListener("message", handleMessage);
+  }, [ws]);
+
+  // ✅ Resize canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -100,40 +127,31 @@ export default function DrawingPanel({ drawings, roomId, slug }: DrawingPanelPro
     return () => window.removeEventListener("resize", resizeCanvas);
   }, []);
 
-  // Redraw all elements
+  // ✅ Redraw on state change
+  useEffect(() => {
+    redraw();
+  }, [elements, currentElement, zoom, pan]);
+
   const redraw = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
-    
-    // Apply camera transform
+
+    // Camera transform
     ctx.translate(pan.x, pan.y);
     ctx.scale(zoom, zoom);
 
-    // Draw grid
     drawGrid(ctx, canvas.width, canvas.height);
 
-    // Draw all elements
-    elements.forEach((element) => {
-      drawElement(ctx, element);
-    });
-
-    // Draw current element being created
-    if (currentElement) {
-      drawElement(ctx, currentElement);
-    }
+    elements.forEach((el) => drawElement(ctx, el));
+    if (currentElement) drawElement(ctx, currentElement);
 
     ctx.restore();
   };
-
-  useEffect(() => {
-    redraw();
-  }, [elements, currentElement, zoom, pan]);
 
   const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
     const gridSize = 20;
@@ -151,7 +169,6 @@ export default function DrawingPanel({ drawings, roomId, slug }: DrawingPanelPro
       ctx.lineTo(x, endY);
       ctx.stroke();
     }
-
     for (let y = startY; y <= endY; y += gridSize) {
       ctx.beginPath();
       ctx.moveTo(startX, y);
@@ -160,111 +177,90 @@ export default function DrawingPanel({ drawings, roomId, slug }: DrawingPanelPro
     }
   };
 
-  const drawElement = (ctx: CanvasRenderingContext2D, element: DrawElement) => {
-    ctx.strokeStyle = element.strokeStyle;
-    ctx.fillStyle = element.fillStyle;
-    ctx.lineWidth = element.lineWidth;
+  const drawElement = (ctx: CanvasRenderingContext2D, el: DrawElement) => {
+    ctx.strokeStyle = el.strokeStyle;
+    ctx.fillStyle = el.fillStyle;
+    ctx.lineWidth = el.lineWidth;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    switch (element.shape) {
+    switch (el.shape) {
       case Shape.rectangle:
-        if (element.startX !== undefined && element.startY !== undefined && 
-            element.endX !== undefined && element.endY !== undefined) {
-          const width = element.endX - element.startX;
-          const height = element.endY - element.startY;
+        if (el.startX && el.startY && el.endX && el.endY) {
+          const w = el.endX - el.startX;
+          const h = el.endY - el.startY;
           ctx.beginPath();
-          ctx.rect(element.startX, element.startY, width, height);
-          if (element.fillStyle !== "transparent") ctx.fill();
+          ctx.rect(el.startX, el.startY, w, h);
+          if (el.fillStyle !== "transparent") ctx.fill();
           ctx.stroke();
         }
         break;
-
       case Shape.circle:
-        if (element.startX !== undefined && element.startY !== undefined && 
-            element.endX !== undefined && element.endY !== undefined) {
-          const radius = Math.sqrt(
-            Math.pow(element.endX - element.startX, 2) + 
-            Math.pow(element.endY - element.startY, 2)
-          );
+        if (el.startX && el.startY && el.endX && el.endY) {
+          const r = Math.sqrt((el.endX - el.startX) ** 2 + (el.endY - el.startY) ** 2);
           ctx.beginPath();
-          ctx.arc(element.startX, element.startY, radius, 0, 2 * Math.PI);
-          if (element.fillStyle !== "transparent") ctx.fill();
+          ctx.arc(el.startX, el.startY, r, 0, 2 * Math.PI);
+          if (el.fillStyle !== "transparent") ctx.fill();
           ctx.stroke();
         }
         break;
-
       case Shape.diamond:
-        if (element.startX !== undefined && element.startY !== undefined && 
-            element.endX !== undefined && element.endY !== undefined) {
-          const centerX = (element.startX + element.endX) / 2;
-          const centerY = (element.startY + element.endY) / 2;
-          const width = element.endX - element.startX;
-          const height = element.endY - element.startY;
-          
+        if (el.startX && el.startY && el.endX && el.endY) {
+          const cx = (el.startX + el.endX) / 2;
+          const cy = (el.startY + el.endY) / 2;
           ctx.beginPath();
-          ctx.moveTo(centerX, element.startY);
-          ctx.lineTo(element.endX, centerY);
-          ctx.lineTo(centerX, element.endY);
-          ctx.lineTo(element.startX, centerY);
+          ctx.moveTo(cx, el.startY);
+          ctx.lineTo(el.endX, cy);
+          ctx.lineTo(cx, el.endY);
+          ctx.lineTo(el.startX, cy);
           ctx.closePath();
-          if (element.fillStyle !== "transparent") ctx.fill();
+          if (el.fillStyle !== "transparent") ctx.fill();
           ctx.stroke();
         }
         break;
-
       case Shape.line:
-        if (element.startX !== undefined && element.startY !== undefined && 
-            element.endX !== undefined && element.endY !== undefined) {
+        if (el.startX && el.startY && el.endX && el.endY) {
           ctx.beginPath();
-          ctx.moveTo(element.startX, element.startY);
-          ctx.lineTo(element.endX, element.endY);
+          ctx.moveTo(el.startX, el.startY);
+          ctx.lineTo(el.endX, el.endY);
           ctx.stroke();
         }
         break;
-
       case Shape.arrow:
-        if (element.startX !== undefined && element.startY !== undefined && 
-            element.endX !== undefined && element.endY !== undefined) {
+        if (el.startX && el.startY && el.endX && el.endY) {
           const headLength = 15;
-          const angle = Math.atan2(element.endY - element.startY, element.endX - element.startX);
-          
+          const angle = Math.atan2(el.endY - el.startY, el.endX - el.startX);
           ctx.beginPath();
-          ctx.moveTo(element.startX, element.startY);
-          ctx.lineTo(element.endX, element.endY);
+          ctx.moveTo(el.startX, el.startY);
+          ctx.lineTo(el.endX, el.endY);
           ctx.stroke();
-          
           ctx.beginPath();
-          ctx.moveTo(element.endX, element.endY);
+          ctx.moveTo(el.endX, el.endY);
           ctx.lineTo(
-            element.endX - headLength * Math.cos(angle - Math.PI / 6),
-            element.endY - headLength * Math.sin(angle - Math.PI / 6)
+            el.endX - headLength * Math.cos(angle - Math.PI / 6),
+            el.endY - headLength * Math.sin(angle - Math.PI / 6)
           );
-          ctx.moveTo(element.endX, element.endY);
+          ctx.moveTo(el.endX, el.endY);
           ctx.lineTo(
-            element.endX - headLength * Math.cos(angle + Math.PI / 6),
-            element.endY - headLength * Math.sin(angle + Math.PI / 6)
+            el.endX - headLength * Math.cos(angle + Math.PI / 6),
+            el.endY - headLength * Math.sin(angle + Math.PI / 6)
           );
           ctx.stroke();
         }
         break;
-
       case Shape.freeHand:
-        if (element.points && element.points.length > 0) {
+        if (el.points && el.points.length) {
           ctx.beginPath();
-          ctx.moveTo(element.points[0].x, element.points[0].y);
-          for (let i = 1; i < element.points.length; i++) {
-            ctx.lineTo(element.points[i].x, element.points[i].y);
-          }
+          ctx.moveTo(el.points[0].x, el.points[0].y);
+          el.points.forEach((p) => ctx.lineTo(p.x, p.y));
           ctx.stroke();
         }
         break;
-
       case Shape.text:
-        if (element.text && element.startX !== undefined && element.startY !== undefined) {
-          ctx.font = `${element.fontSize || "16px"} ${element.font || "Arial"}`;
-          ctx.fillStyle = element.strokeStyle;
-          ctx.fillText(element.text, element.startX, element.startY);
+        if (el.text && el.startX && el.startY) {
+          ctx.font = `${el.fontSize || "16px"} ${el.font || "Arial"}`;
+          ctx.fillStyle = el.strokeStyle;
+          ctx.fillText(el.text, el.startX, el.startY);
         }
         break;
     }
@@ -273,7 +269,6 @@ export default function DrawingPanel({ drawings, roomId, slug }: DrawingPanelPro
   const getMousePos = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
-
     const rect = canvas.getBoundingClientRect();
     return {
       x: (e.clientX - rect.left - pan.x) / zoom,
@@ -283,46 +278,40 @@ export default function DrawingPanel({ drawings, roomId, slug }: DrawingPanelPro
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const pos = getMousePos(e);
-
     if (selectedTool === Tool.pan || e.button === 1 || (e.button === 0 && e.ctrlKey)) {
       setIsPanning(true);
       setLastPanPoint({ x: e.clientX, y: e.clientY });
       return;
     }
-
     if (selectedTool === Tool.select || selectedTool === Tool.erase) return;
 
     setIsDrawing(true);
-
-    const newElement: DrawElement = {
+    const newEl: DrawElement = {
       id: `temp-${Date.now()}`,
       shape: selectedTool as Shape,
       strokeStyle: strokeColor,
       fillStyle: fillColor,
-      lineWidth: lineWidth,
+      lineWidth,
       startX: pos.x,
       startY: pos.y,
       endX: pos.x,
       endY: pos.y,
       points: selectedTool === Shape.freeHand ? [pos] : undefined
     };
-
-    setCurrentElement(newElement);
+    setCurrentElement(newEl);
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (isPanning) {
-      const deltaX = e.clientX - lastPanPoint.x;
-      const deltaY = e.clientY - lastPanPoint.y;
-      setPan({ x: pan.x + deltaX, y: pan.y + deltaY });
+      const dx = e.clientX - lastPanPoint.x;
+      const dy = e.clientY - lastPanPoint.y;
+      setPan({ x: pan.x + dx, y: pan.y + dy });
       setLastPanPoint({ x: e.clientX, y: e.clientY });
       return;
     }
-
     if (!isDrawing || !currentElement) return;
 
     const pos = getMousePos(e);
-
     if (currentElement.shape === Shape.freeHand) {
       setCurrentElement({
         ...currentElement,
@@ -337,27 +326,26 @@ export default function DrawingPanel({ drawings, roomId, slug }: DrawingPanelPro
     }
   };
 
-  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseUp = () => {
     if (isPanning) {
       setIsPanning(false);
       return;
     }
-
     if (!isDrawing || !currentElement) return;
 
     setIsDrawing(false);
-    
-    // Add element to list
-    const finalElement = { ...currentElement, id: `${Date.now()}-${Math.random()}` };
-    setElements([...elements, finalElement]);
+    const finalEl = { ...currentElement, id: `${Date.now()}-${Math.random()}` };
     setCurrentElement(null);
 
-    // Send to WebSocket
+    // ✅ Add to local state immediately for instant feedback
+    setElements((prev) => [...prev, finalEl]);
+
+    // ✅ Also send to WS for other clients
     if (ws && isConnected && slug) {
       ws.send(JSON.stringify({
         type: "draw",
         roomId: slug,
-        element: finalElement
+        element: finalEl
       }));
     }
   };
@@ -396,11 +384,10 @@ export default function DrawingPanel({ drawings, roomId, slug }: DrawingPanelPro
             <button
               key={tool.id}
               onClick={() => setSelectedTool(tool.id)}
-              className={`p-2 rounded transition-all ${
-                selectedTool === tool.id
+              className={`p-2 rounded transition-all ${selectedTool === tool.id
                   ? "bg-[#ff6b35] text-white"
                   : "text-gray-400 hover:text-white hover:bg-[#2a2a2a]"
-              }`}
+                }`}
               title={tool.label}
             >
               <Icon size={20} />
@@ -450,17 +437,11 @@ export default function DrawingPanel({ drawings, roomId, slug }: DrawingPanelPro
 
       {/* Zoom Controls */}
       <div className="absolute bottom-4 right-4 z-10 bg-[#1a1a1a] rounded-lg shadow-lg border border-[#333] p-2 flex flex-col gap-2">
-        <button
-          onClick={() => handleZoom(0.1)}
-          className="p-2 text-gray-400 hover:text-white hover:bg-[#2a2a2a] rounded"
-        >
+        <button onClick={() => handleZoom(0.1)} className="p-2 text-gray-400 hover:text-white hover:bg-[#2a2a2a] rounded">
           <ZoomIn size={20} />
         </button>
         <span className="text-xs text-gray-400 text-center">{Math.round(zoom * 100)}%</span>
-        <button
-          onClick={() => handleZoom(-0.1)}
-          className="p-2 text-gray-400 hover:text-white hover:bg-[#2a2a2a] rounded"
-        >
+        <button onClick={() => handleZoom(-0.1)} className="p-2 text-gray-400 hover:text-white hover:bg-[#2a2a2a] rounded">
           <ZoomOut size={20} />
         </button>
         <button
@@ -485,7 +466,7 @@ export default function DrawingPanel({ drawings, roomId, slug }: DrawingPanelPro
           setIsPanning(false);
         }}
         onWheel={handleWheel}
-        className="w-full h-full cursor-crosshair"
+        className="w-full h-full"
         style={{
           cursor: isPanning || selectedTool === Tool.pan ? "grab" : "crosshair"
         }}
